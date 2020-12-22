@@ -1,3 +1,14 @@
+/* Atividade 2 - Trabalho Final de SO
+ *
+ * Equipe - Vagus Dream
+ * Gabriel Felipe 234782
+ * Victor Calebe 194664
+  *
+ * Para execução de programa basta rodas os seguintes comando:
+ * $ gcc -pthread trab.c -o <nome_do_executavel>
+ * $ ./<nome_do_executavel>
+ */
+
 // Inclusão das Bibliotecas necessárias.
 #include <stdlib.h>
 #include <stdio.h>
@@ -9,10 +20,12 @@
 #define N 20
 int contPostIt = 0;
 
+
 // Criação de uma struct para passar multiplos argumentos para as Threads.
 struct args_struct {
-    sem_t mutex;
+    sem_t mutex_mochila;
     sem_t mutex_sono;
+    sem_t mutex_escrita;    
     int mochila[N];
     int quantidade_mensagens;
     int posicao_mochila;
@@ -22,8 +35,8 @@ struct args_struct {
 void dorme_aleatorio();
 void leva_mochila_ate_B_e_volta();
 
-// Só um método que exibe a mensagem que foi gerada e atualiza o número depois.
-int escreve(int *quantidade_mensagens);
+// Só um método que atualiza o número de mensagens e exibe a mensagem que foi gerada depois.
+void escreve(int *quantidade_mensagens);
 
 // Recebe uma mensagem e cola ela, cola ela na mochila e atualiza a proxima posição de mensagem.
 void ColaPostIt(int (*mochila)[N], int *posicao_mochila, int mensagem);
@@ -46,12 +59,13 @@ void dorme_aleatorio() {
     printf("Acordou.\n");
 }
 
-int escreve(int *quantidade_mensagens) {
-    printf("Escrita a mensagem %i\n", ++*quantidade_mensagens);
-    return *quantidade_mensagens;
+void escreve(int *quantidade_mensagens) {
+    *quantidade_mensagens += 1;
+    printf("Escrita a mensagem %i\n", *quantidade_mensagens);
 };
 
 void ColaPostIt(int (*mochila)[N], int *posicao_mochila, int mensagem){
+    printf("\nColada mensagem %i\n", mensagem);
     *mochila[*posicao_mochila] = mensagem;
     *posicao_mochila = (*posicao_mochila + 1)%N;
 }
@@ -60,64 +74,65 @@ void *usuario(void *arguments) {
     struct args_struct *args = arguments;
     while(1) {
         dorme_aleatorio();
-        int mensagem = escreve(&args->quantidade_mensagens);
-        // Travo o mutex para acessar a região critica (bolsa do pombo).
-        sem_wait(&args->mutex);
-        ColaPostIt(&args->mochila, &args->posicao_mochila, mensagem);
+        // To usando um mutex aqui pra travar a escrita na quantidade de mensagens,
+        // porque tive problemas com sobreescrita antes da hora.
+        sem_wait(&args->mutex_escrita);
+        escreve(&args->quantidade_mensagens);
+        
+
+        // Travo o mutex para acessar a região critica (mochila).
+        sem_wait(&args->mutex_mochila);
+
+        ColaPostIt(&args->mochila, &args->posicao_mochila, args->quantidade_mensagens);
+        // Libero a reescrita da quantidade de mensagens
+        sem_post(&args->mutex_escrita);
         
         contPostIt++;
         // Destravo o mutex para outros acessarem a região.
-		sem_post(&args->mutex);
+		sem_post(&args->mutex_mochila);
         if(contPostIt == N) {
             printf("mochila cheia %i\n", contPostIt);
             // Destravo/Acordo o pombo.
 			sem_post(&args->mutex_sono);
         }
     }
-	pthread_exit(NULL);
 }
 
 void *pombo(void *arguments) {
     struct args_struct *args = arguments;
     while(1) {
-        // Travo todo tipo de acesso a região critica assim que disponivel.
+        // Travo os acesso a região critica da mochila.
         sem_wait(&args->mutex_sono);
-        sem_wait(&args->mutex); 
+        sem_wait(&args->mutex_mochila); 
         
         leva_mochila_ate_B_e_volta();
         contPostIt = 0;
 
-        // Array auxiliar para me ajudar a percorrer os valores da mochila.
-        int (*aux)[20] = &args->mochila;
         for (int i = 0; i<N; i++) {
             printf("Adic. msg %d\n", *(args->mochila)+i);
         }
-        sem_post(&args->mutex); 
+        sem_post(&args->mutex_mochila); 
         printf("Voltou.\n");
     }
-	pthread_exit(NULL);
 }
 
 
 int main () {
-    // Mutex de Usuário e Pombo para acesso a Região Critica (Mochila).
-    sem_t mutex; 
-    // Mutex adicional e especifíco de Pombo, para gerenciar sua atividade.
-    sem_t mutex_sono;
-
-    sem_init(&mutex, 0 , 1);
-    sem_init(&mutex_sono, 0, 0);
 
     // Crio uma estrutura para informar os Mutexs para as Threads de forma mais simples.
     struct args_struct arguments;
-    arguments.mutex = mutex;
-    arguments.mutex_sono = mutex_sono;
     arguments.quantidade_mensagens = 0;
     arguments.posicao_mochila = 0;
 
+    //Inicío o mutex para acesso a variável da mochila.
+    sem_init(&arguments.mutex_mochila, 0 , 1);
+    //Inicío o mutex para o sono da pomba.
+    sem_init(&arguments.mutex_sono, 0, 0);
+    //Inicío o mutex para acesso a variável da mensagem.
+    sem_init(&arguments.mutex_escrita, 0, 1);
+
     // Inicializo o gerador de número aleatório.
     srand(time(NULL));
-
 
     // Leio o número de Usuários que o Usuário informar.
     int N_USUARIOS;
@@ -133,6 +148,7 @@ int main () {
     // Cria threads para o Pombo.
     pthread_create(&threahd_pombo, NULL, pombo, (void *)&arguments);
 
+    // Dou join nas threads para finaliza-las.
     for(int aux = 0; aux < N_USUARIOS; aux++) {
         pthread_join(thread_usuario[aux], NULL);
     }

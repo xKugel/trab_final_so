@@ -1,10 +1,10 @@
-# Trabalho Final de SO
+# Trabalho Final de SO - Atividade 2
 
 Esse é o trabalho de conclusão de Semestre para Diciplina de Sistemas Operacionais, do segundo semestre de 2020 na Faculdade de Tecnologia da UNICAMP.
 
 A Equipe responsável por esse código chama-se Vagus-Dream, e é composta por Gabriel Felipe Kugel RA 234782 e Victor Calebe Fernandes da Silva RA 194664. Orientados pelo Prof. André Leon S. Gradvohl.
 
-## Download e 
+## Download e Compilação
 
 Primeiro clone este repositório:
 
